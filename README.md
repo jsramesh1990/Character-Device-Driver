@@ -6,18 +6,12 @@ This project shows how Linux user-space communicates with kernel-space using a c
 
 ## 📁 Project Structure
 
-device-driver-project/
-│
-├── src/
-│   ├── mychardev.c        # Kernel module (device driver)
-│   └── user_app.c         # User-space application
-│
-├── Makefile               # Build kernel module + user app
-└── README.md              # Documentation
-
----
-
-## 🔄 Communication Flow Diagram
+- main.c       # User-space application
+- layers.h     # Header file defining layer structures and function prototypes
+- layers.c     # Implementation of OS/communication layers
+- Makefile     # Build rules for compiling the project
+  
+**Communication Flow Diagram**
 
 User App (user_app.c)
         |
