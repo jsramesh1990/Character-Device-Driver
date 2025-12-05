@@ -11,7 +11,8 @@ device-driver-project/
 │   └── user_app.c         # User-space application
 │
 ├── Makefile               # Build kernel module + user app
-└── README.md              # Explanation + how to run
+└── README.md              # Documentation
+
 
 **Communication Flow Diagram**
 User App (user_app.c)
