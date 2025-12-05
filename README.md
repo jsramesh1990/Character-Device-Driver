@@ -4,6 +4,8 @@ This project shows how Linux user-space communicates with kernel-space using a c
 
 **Project Structure**
 
+## 📁 Project Structure
+
 device-driver-project/
 │
 ├── src/
@@ -13,19 +15,21 @@ device-driver-project/
 ├── Makefile               # Build kernel module + user app
 └── README.md              # Documentation
 
+---
 
-**Communication Flow Diagram**
+## 🔄 Communication Flow Diagram
+
 User App (user_app.c)
-       |
-       | open(), read(), write()
-       v
+        |
+        | open(), read(), write()
+        v
 Linux System Call Interface
-       |
-       v
+        |
+        v
 Character Device Driver (mychardev.c)
-       |
-       | copy_to_user() / copy_from_user()
-       v
+        |
+        | copy_to_user() / copy_from_user()
+        v
 Kernel Space
 
 ## Build
