@@ -1,4 +1,4 @@
-#  Simple Character Device Driver
+# Simple Character Device Driver
 
 ![Linux](https://img.shields.io/badge/Linux-Kernel_Module-blue.svg)
 ![C](https://img.shields.io/badge/Language-C-blue.svg)
@@ -9,173 +9,217 @@
 
 A comprehensive demonstration of Linux character device driver development showcasing communication between **User-space** and **Kernel-space** through a custom character device.
 
-##  Table of Contents
-- [Project Flow](#-project-flow)
-- [Architecture](#-architecture)
-- [Working Flow](#-working-flow)
-- [Yocto Integration](#-yocto-integration-flow)
-- [Prerequisites](#-prerequisites)
-- [Quick Start](#-quick-start)
-- [Procedure](#-procedure)
-- [Testing](#-testing)
-- [Troubleshooting](#-troubleshooting)
+## Table of Contents
+- [Project Flow](#project-flow)
+- [Architecture](#architecture)
+- [Working Flow](#working-flow)
+- [Yocto Integration](#yocto-integration)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Procedure](#procedure)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
 
-##  Project Flow
+## Project Flow
 
-```mermaid
-graph LR
-    A[User Application] -->|open\(\)| B[/dev/mychardev/]
-    B --> C[VFS Layer]
-    C --> D[Character Device Driver]
-    D --> E[Kernel Space]
-    E -->|read/write| D
-    D -->|copy_to_user| C
-    C -->|data| A
-    
-    style A fill:#e1f5ff
-    style B fill:#fff4e1
-    style D fill:#ffe1e1
-    style E fill:#e1ffe1
+```
++----------------+     open()     +------------------+
+|   User App     | -------------> |   /dev/mychardev  |
++----------------+                +------------------+
+        ^                                 |
+        |                                 | VFS Layer
+        |                                 v
+        |                        +------------------+
+        |                        | Character Device |
+        |                        |     Driver       |
+        |                        +------------------+
+        |                                 |
+        |                                 | Kernel Space
+        |                                 v
+        |                        +------------------+
+        +------------------------+   copy_to_user   |
+                                 |   Kernel Buffer  |
+                                 +------------------+
 ```
 
-##  Architecture
+## Architecture
 
-```mermaid
-graph TB
-    subgraph "User Space"
-        APP[User Application<br/>./user_app]
-        DEV[Device Node<br/>/dev/mychardev]
-    end
-    
-    subgraph "System Call Interface"
-        SYS[System Calls<br/>open/read/write/close]
-    end
-    
-    subgraph "Kernel Space"
-        VFS[Virtual File System]
-        CDD[Character Device Driver<br/>mychardev.ko]
-        FB[File Operations<br/>.open .read .write .release]
-        KB[Kernel Buffer<br/>mydata[]]
-    end
-    
-    subgraph "Hardware"
-        HW[Hardware Device]
-    end
-    
-    APP --> |User I/O| DEV
-    DEV --> SYS
-    SYS --> VFS
-    VFS --> CDD
-    CDD --> FB
-    FB --> KB
-    KB --> HW
-    
-    style APP fill:#bbdef5
-    style CDD fill:#ffccbc
-    style KB fill:#c8e6c9
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        USER SPACE                            │
+│  ┌──────────────────┐              ┌──────────────────┐    │
+│  │  User Application│              │  /dev/mychardev  │    │
+│  │   (./user_app)   │──────────────│   (Device Node)  │    │
+│  └──────────────────┘              └──────────────────┘    │
+└─────────────────────────┬───────────────────────────────────┘
+                          │ System Calls
+                          │ open/read/write/close
+┌─────────────────────────▼───────────────────────────────────┐
+│                        KERNEL SPACE                          │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │              Virtual File System (VFS)               │   │
+│  └─────────────────────────┬────────────────────────────┘   │
+│                            │                                 │
+│  ┌─────────────────────────▼────────────────────────────┐   │
+│  │      Character Device Driver (mychardev.ko)          │   │
+│  │  ┌────────────────────────────────────────────────┐  │   │
+│  │  │         File Operations Structure              │  │   │
+│  │  │  .open = my_open                               │  │   │
+│  │  │  .read = my_read                               │  │   │
+│  │  │  .write = my_write                             │  │   │
+│  │  │  .release = my_release                         │  │   │
+│  │  └────────────────────────────────────────────────┘  │   │
+│  │                                                       │   │
+│  │  ┌────────────────────────────────────────────────┐  │   │
+│  │  │           Kernel Buffer (mydata[])             │  │   │
+│  │  └────────────────────────────────────────────────┘  │   │
+│  └───────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-##  Working Flow
+## Working Flow
 
-```mermaid
-sequenceDiagram
-    participant U as User App
-    participant V as VFS
-    participant D as Device Driver
-    participant K as Kernel Buffer
-    
-    Note over U,K: Driver Initialization
-    D->>D: module_init()
-    D->>K: alloc_chrdev_region()
-    D->>V: cdev_init() & cdev_add()
-    V-->>D: Major Number (e.g., 240)
-    
-    Note over U,K: Device Operation
-    
-    U->>V: open("/dev/mychardev")
-    V->>D: my_open()
-    D-->>V: Success
-    V-->>U: File Descriptor
-    
-    U->>V: write(fd, "Hello", 5)
-    V->>D: my_write()
-    D->>K: copy_from_user()
-    K-->>D: Buffer Updated
-    D-->>U: Bytes Written
-    
-    U->>V: read(fd, buffer, 5)
-    V->>D: my_read()
-    D->>K: copy_to_user()
-    K-->>D: Data Retrieved
-    D-->>U: Bytes Read
-    
-    U->>V: close(fd)
-    V->>D: my_release()
-    D-->>V: Cleanup
-    V-->>U: Closed
-    
-    Note over U,K: Driver Cleanup
-    D->>K: module_exit()
-    D->>V: cdev_del() & unregister_chrdev_region()
+```
+Driver Initialization:
+======================
+    module_init()
+         │
+         ▼
+    alloc_chrdev_region()  ──────► Gets Major Number (e.g., 240)
+         │
+         ▼
+    cdev_init() & cdev_add()
+         │
+         ▼
+    Driver Registered in Kernel
+
+Device Operation:
+================
+    User App                    VFS                     Device Driver
+       │                         │                           │
+       │   open("/dev/mychardev")│                           │
+       │────────────────────────►│                           │
+       │                         │      my_open()           │
+       │                         │──────────────────────────►│
+       │                         │                           │
+       │                         │      Success              │
+       │                         │◄──────────────────────────│
+       │◄───File Descriptor──────│                           │
+       │                         │                           │
+       │   write(fd, "Hello", 5) │                           │
+       │────────────────────────►│                           │
+       │                         │      my_write()           │
+       │                         │──────────────────────────►│
+       │                         │                           │
+       │                         │    copy_from_user()       │
+       │                         │      [Store in buffer]    │
+       │                         │                           │
+       │                         │      Bytes Written (5)    │
+       │                         │◄──────────────────────────│
+       │◄───5 bytes written──────│                           │
+       │                         │                           │
+       │   read(fd, buffer, 5)   │                           │
+       │────────────────────────►│                           │
+       │                         │      my_read()            │
+       │                         │──────────────────────────►│
+       │                         │                           │
+       │                         │     copy_to_user()        │
+       │                         │   [Read from buffer]      │
+       │                         │                           │
+       │                         │      Bytes Read (5)       │
+       │                         │◄──────────────────────────│
+       │◄───"Hello" (5 bytes)────│                           │
+       │                         │                           │
+       │   close(fd)             │                           │
+       │────────────────────────►│                           │
+       │                         │      my_release()         │
+       │                         │──────────────────────────►│
+       │                         │                           │
+       │                         │      Cleanup Complete     │
+       │                         │◄──────────────────────────│
+       │◄───Device Closed────────│                           │
+
+Driver Cleanup:
+===============
+    module_exit()
+         │
+         ▼
+    cdev_del()
+         │
+         ▼
+    unregister_chrdev_region()
+         │
+         ▼
+    Driver Removed
 ```
 
-##  Yocto Integration Flow
+## Yocto Integration
 
-```mermaid
-graph TB
-    subgraph "Yocto Build Environment"
-        A[Yocto Setup] --> B[Create Layer]
-        B --> C[Driver Recipe]
-        C --> D[Kernel Recipe Modification]
-        
-        subgraph "Layer Structure"
-            E[mychardev-layer/]
-            F[recipes-kernel/]
-            G[recipes-example/]
-        end
-        
-        D --> E
-        E --> F
-        E --> G
-        
-        F --> H[linux-yocto_%.bbappend]
-        F --> I[mychardev/]
-        
-        I --> J[mychardev.c]
-        I --> K[Makefile]
-        
-        H --> L[Kernel Config<br/>CONFIG_MYCHARDEV=m]
-    end
-    
-    subgraph "Build Process"
-        M[bitbake core-image-minimal] --> N[Kernel Built with Driver]
-        N --> O[Root Filesystem Created]
-        O --> P[Device Node Rules]
-    end
-    
-    subgraph "Target Device"
-        Q[Deploy Image] --> R[Boot Target]
-        R --> S[lsmod | grep mychardev]
-        S --> T[echo test > /dev/mychardev]
-    end
-    
-    L --> M
-    P --> Q
-    
-    style E fill:#ffe0b2
-    style H fill:#b3e5fc
-    style M fill:#c8e6c9
+### Yocto Build Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     YOCTO BUILD ENVIRONMENT                      │
+│                                                                   │
+│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐    │
+│  │ Yocto Setup  │────►│ Create Layer │────►│Driver Recipe │    │
+│  └──────────────┘     └──────────────┘     └──────────────┘    │
+│                                                    │              │
+│                                                    ▼              │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                    Layer Structure                        │   │
+│  │  meta-mychardev/                                          │   │
+│  │  ├── conf/                                                │   │
+│  │  │   └── layer.conf                                       │   │
+│  │  ├── recipes-kernel/                                      │   │
+│  │  │   ├── linux/                                           │   │
+│  │  │   │   └── linux-yocto_%.bbappend                      │   │
+│  │  │   └── mychardev/                                       │   │
+│  │  │       ├── mychardev.bb                                 │   │
+│  │  │       ├── mychardev.c                                  │   │
+│  │  │       └── Makefile                                     │   │
+│  │  └── recipes-example/                                     │   │
+│  │      └── mychardev-init/                                  │   │
+│  │          └── mychardev-init.bb                            │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                              │                                    │
+│                              ▼                                    │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                   Build Process                           │   │
+│  │  bitbake core-image-minimal                               │   │
+│  │       │                                                    │   │
+│  │       ▼                                                    │   │
+│  │  Kernel Built with mychardev.ko                           │   │
+│  │       │                                                    │   │
+│  │       ▼                                                    │   │
+│  │  Root Filesystem Created                                   │   │
+│  │       │                                                    │   │
+│  │       ▼                                                    │   │
+│  │  Device Node Rules Added                                   │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      TARGET DEVICE                               │
+│                                                                   │
+│  1. Deploy Image to Target                                       │
+│  2. Boot Target                                                  │
+│  3. Verify: lsmod | grep mychardev                              │
+│  4. Test: echo "Hello" > /dev/mychardev                         │
+│  5. Read: cat /dev/mychardev                                     │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Yocto Integration Procedure
 
-#### 1️⃣ **Create Custom Layer**
+**Step 1: Create Custom Layer**
 ```bash
 mkdir -p yocto/meta-mychardev/{recipes-kernel,recipes-example,conf}
 cd yocto/meta-mychardev
 ```
 
-#### 2️⃣ **Layer Configuration (conf/layer.conf)**
+**Step 2: Layer Configuration (conf/layer.conf)**
 ```bitbake
 BBPATH .= ":${LAYERDIR}"
 BBFILES += "${LAYERDIR}/recipes-*/*/*.bb \
@@ -189,7 +233,7 @@ LAYERDEPENDS_meta-mychardev = "core"
 LAYERSERIES_COMPAT_meta-mychardev = "kirkstone"
 ```
 
-#### 3️⃣ **Kernel Module Recipe (recipes-kernel/mychardev/mychardev.bb)**
+**Step 3: Kernel Module Recipe (recipes-kernel/mychardev/mychardev.bb)**
 ```bitbake
 SUMMARY = "Simple Character Device Driver"
 DESCRIPTION = "A character device driver for Linux"
@@ -213,19 +257,44 @@ FILES:${PN} += "${base_libdir}/modules/${KERNEL_VERSION}/extra/mychardev.ko"
 RPROVIDES:${PN} += "kernel-module-mychardev"
 ```
 
-#### 4️⃣ **Kernel Config (recipes-kernel/linux/linux-yocto_%.bbappend)**
+**Step 4: Kernel Config (recipes-kernel/linux/linux-yocto_%.bbappend)**
 ```bitbake
 FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 
 SRC_URI += "file://mychardev.cfg"
 
 do_configure:append() {
-    # Enable the driver in kernel config
     echo 'CONFIG_MYCHARDEV=m' >> ${B}/.config
 }
 ```
 
-#### 5️⃣ **Device Node Creation (recipes-example/mychardev-init/mychardev-init.bb)**
+**Step 5: Device Node Creation Script (recipes-example/mychardev-init/mychardev-init)**
+```bash
+#!/bin/sh
+# mychardev-init - init script for mychardev device node
+
+MAJOR=$(grep mychardev /proc/devices | awk '{print $1}')
+
+case "$1" in
+    start)
+        echo "Creating /dev/mychardev with major $MAJOR"
+        mknod /dev/mychardev c $MAJOR 0
+        chmod 666 /dev/mychardev
+        ;;
+    stop)
+        echo "Removing /dev/mychardev"
+        rm -f /dev/mychardev
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+        ;;
+esac
+
+exit 0
+```
+
+**Step 6: Device Node Recipe (recipes-example/mychardev-init/mychardev-init.bb)**
 ```bitbake
 SUMMARY = "Init script for mychardev device node"
 LICENSE = "MIT"
@@ -245,7 +314,7 @@ do_install() {
 FILES:${PN} += "${sysconfdir}/init.d/mychardev-init"
 ```
 
-#### 6️⃣ **Build with Yocto**
+**Step 7: Build with Yocto**
 ```bash
 # Source Yocto environment
 source poky/oe-init-build-env build
@@ -259,20 +328,19 @@ echo 'IMAGE_INSTALL:append = " mychardev mychardev-init"' >> conf/local.conf
 # Build the image
 bitbake core-image-minimal
 
-# Flash and run on target
+# Run with QEMU
 runqemu qemux86-64
 ```
 
-##  Prerequisites
+## Prerequisites
 
 - **Linux Kernel Headers** (`linux-headers-$(uname -r)`)
 - **Build Essentials** (gcc, make)
 - **QEMU** (for Yocto testing)
 - **Yocto Project** (for embedded integration)
 
-##  Quick Start
+## Quick Start
 
-### Clone & Build
 ```bash
 # Clone repository
 git clone https://github.com/yourusername/simple-char-device-driver.git
@@ -285,7 +353,7 @@ make
 ls -la src/mychardev.ko
 ```
 
-##  Procedure
+## Procedure
 
 ### Step 1: Build the Driver Module
 ```bash
@@ -363,7 +431,7 @@ sudo rmmod mychardev
 dmesg | tail -5
 ```
 
-## 📊 Testing
+## Testing
 
 ### Performance Test
 ```bash
@@ -384,19 +452,44 @@ stress --io 4 --timeout 30s &
 ./user_app
 ```
 
-##  Troubleshooting
+## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| `insmod: ERROR: could not insert module` | Check kernel version compatibility<br/>`uname -r` |
+| `insmod: ERROR: could not insert module` | Check kernel version compatibility with `uname -r` |
 | `Permission denied` on /dev/mychardev | Run `sudo chmod 666 /dev/mychardev` |
 | Device node not found | Create node with correct major number |
 | Module not loading | Check dmesg for errors: `dmesg \| grep mychardev` |
 | Yocto build fails | Ensure layer dependencies are met |
 
+## Project Structure
 
+```
+simple-char-device-driver/
+├── src/
+│   ├── mychardev.c        # Character device driver
+│   ├── Makefile           # Build configuration
+│   └── user_app.c         # Userspace test application
+├── yocto/                  # Yocto recipes
+│   └── meta-mychardev/
+│       ├── conf/
+│       │   └── layer.conf
+│       ├── recipes-kernel/
+│       │   ├── linux/
+│       │   │   └── linux-yocto_%.bbappend
+│       │   └── mychardev/
+│       │       ├── mychardev.bb
+│       │       ├── mychardev.c
+│       │       └── Makefile
+│       └── recipes-example/
+│           └── mychardev-init/
+│               ├── mychardev-init.bb
+│               └── mychardev-init
+├── Makefile               # Top-level makefile
+└── README.md             # Documentation
+```
 
-##  Contributing
+## Contributing
 
 1. Fork the repository
 2. Create feature branch (`git checkout -b feature/amazing`)
@@ -404,11 +497,11 @@ stress --io 4 --timeout 30s &
 4. Push to branch (`git push origin feature/amazing`)
 5. Open Pull Request
 
-##  License
+## License
 
-This project is licensed under the GPLv3 License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GPLv3 License.
 
-##  Acknowledgments
+## Acknowledgments
 
 - Linux Kernel Development Community
 - Yocto Project Documentation
@@ -420,4 +513,3 @@ This project is licensed under the GPLv3 License - see the [LICENSE](LICENSE) fi
 Made with ❤️ for Linux Kernel Development
 </div>
 ```
-
