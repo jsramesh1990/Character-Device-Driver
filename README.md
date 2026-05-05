@@ -512,4 +512,3 @@ This project is licensed under the GPLv3 License.
 <div align="center">
 Made with ❤️ for Linux Kernel Development
 </div>
-```
