@@ -1,0 +1,9 @@
+char-DD/
+├── src/
+│   ├── simulated_chardev.c
+│   └── Makefile           <-- Move kernel module Makefile here
+├── include/
+│   └── simulated_chardev.h
+└── user/
+    └── test_client.py
+
